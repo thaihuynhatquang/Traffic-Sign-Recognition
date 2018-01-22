@@ -85,19 +85,21 @@ while success:
             temp = [id, count_frame, x, y, x+w, y+h]
             rectangles.append(temp)
 
-    cv2.imshow("frame", frame)
+    # cv2.imshow("frame", frame)
     videoOut.write(frame)
-    cv2.imshow("mask", mask)
+    # cv2.imshow("mask", mask)
     k = cv2.waitKey(1)
     if k in [27, ord('Q'), ord('q')]: # exit on ESC
         break
     count_frame = count_frame + 1
 # print (np.array(rectangles))
 
-print (len(rectangles))
-for temp in rectangles:
-    strArr = [str(a) for a in temp]
-    print (" ".join(strArr))
+with open('output4.txt', 'w') as file:
+    file.write(str(len(rectangles)) + '\n')
+    for temp in rectangles:
+        strArr = [str(a) for a in temp]
+        file.write(" ".join(strArr))
+        file.write('\n')
 vidcap.release()
 videoOut.release()
 cv2.destroyAllWindows()
