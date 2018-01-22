@@ -4,14 +4,12 @@ import numpy as np
 imgData = []
 keyData = []
 descriptorData = []
-detector = cv2.xfeatures2d.SURF_create(300)
+detector = cv2.xfeatures2d.SURF_create(500)
 
 def readImgData(path):
     for i in range (0,10):
-        temp = cv2.imread(str(path) + str(i) + '.jpg')
+        temp = cv2.imread(str(path) + str(i+1) + '.jpg')
         imgData.append(temp)
-        # cv2.imshow(str(i+1),temp)
-        # print (temp)
         tempKey, tempDescriptor = detector.detectAndCompute(temp, None)
         keyData.append(tempKey)
         descriptorData.append(tempDescriptor)
@@ -28,7 +26,6 @@ def compareImg(obj):
     maxFeature = 0
     idx = -1
     for i in range(0, 10):
-        #keyData, descriptorData = detector.detectAndCompute(img,None)
         matches = flann.knnMatch(descriptorObj, descriptorData[i], k=2)
         # Need to draw only good matches, so create a mask
         matchesMask = [[0,0] for i in range(len(matches))]
@@ -40,7 +37,9 @@ def compareImg(obj):
                 countMatches += 1
         if countMatches > maxFeature:
             maxFeature = countMatches
-            idx = i
+            idx = i + 1
+    if idx > 7:
+        return 8
     return idx
 
 vidcap = cv2.VideoCapture("test4.avi")
@@ -68,6 +67,7 @@ while success:
     # mask = cv2.GaussianBlur(mask, (5, 5), 2, 2)
     element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
     mask = cv2.dilate(mask,element,iterations = 1)
+
     _, contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     for contour in contours:
@@ -81,9 +81,10 @@ while success:
             if id == -1:
                 continue
             cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
-            cv2.putText(frame, str(id), (x+20, y+20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,255,255))
-            temp = [count_frame, id, x, y]
+            cv2.putText(frame, str(id), (x+w+20, y+h+20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,255,255))
+            temp = [id, count_frame, x, y, x+w, y+h]
             rectangles.append(temp)
+
     cv2.imshow("frame", frame)
     videoOut.write(frame)
     cv2.imshow("mask", mask)
@@ -91,7 +92,12 @@ while success:
     if k in [27, ord('Q'), ord('q')]: # exit on ESC
         break
     count_frame = count_frame + 1
-print (np.array(rectangles))
+# print (np.array(rectangles))
+
+print (len(rectangles))
+for temp in rectangles:
+    strArr = [str(a) for a in temp]
+    print (" ".join(strArr))
 vidcap.release()
 videoOut.release()
 cv2.destroyAllWindows()
