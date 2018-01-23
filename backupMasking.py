@@ -18,3 +18,6 @@ def getMaskBlue(img_hsv):
     lower_blue = np.array([100,150,0])
     upper_blue = np.array([140,255,255])
     return cv2.inRange(img_hsv, lower_blue, upper_blue)
+
+# change constrast
+# cv2.convertScaleAbs(frame, frame, 1.25, 0)
