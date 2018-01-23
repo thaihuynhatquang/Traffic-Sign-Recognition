@@ -1,75 +1,82 @@
 import cv2
 import numpy as np
 
-imgData = []
 keyData = []
 descriptorData = []
-detector = cv2.xfeatures2d.SURF_create(500)
+
+# Initiate SIFT/SURF detector
+detector = cv2.xfeatures2d.SIFT_create()
+SCALE = 1
+
+# paths
+TRAFFIC_SIGN_PATH = 'traffic_sign\\'
+OUTPUT_PATH = 'Output\\'
+INPUT_PATH = 'Input\\'
+INPUT_VIDEO = 'test0.avi'
 
 def readImgData(path):
-    for i in range (0,10):
-        temp = cv2.imread(str(path) + str(i+1) + '.jpg')
-        imgData.append(temp)
+    for i in range (0, 10):
+        temp = cv2.imread(path + str(i+1) + '.jpg', SCALE)
         tempKey, tempDescriptor = detector.detectAndCompute(temp, None)
         keyData.append(tempKey)
         descriptorData.append(tempDescriptor)
 
-readImgData("traffic_sign\\")
-
-FLANN_INDEX_KDTREE = 0
-index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-search_params = dict(checks=50)   # or pass empty dictionary
-flann = cv2.FlannBasedMatcher(index_params,search_params)
-
 def compareImg(obj):
     keyObj, descriptorObj = detector.detectAndCompute(obj,None)
-    maxFeature = 0
-    idx = -1
-    for i in range(0, 10):
-        matches = flann.knnMatch(descriptorObj, descriptorData[i], k=2)
-        # Need to draw only good matches, so create a mask
-        matchesMask = [[0,0] for i in range(len(matches))]
-        # ratio test as per Lowe's paper
-        countMatches = 0
-        for j,(m,n) in enumerate(matches):
-            if m.distance < 0.6*n.distance:
-                matchesMask[j]=[1,0]
-                countMatches += 1
-        if countMatches > maxFeature:
-            maxFeature = countMatches
-            idx = i + 1
-    if idx > 7:
-        return 8
-    return idx
+    maxMatches = 0
+    idx = -1 # idx = -1 means does not found matched image
 
-vidcap = cv2.VideoCapture("test4.avi")
+    for i in range(0, 10):
+        # BFMatcher with default params
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(descriptorObj, descriptorData[i], k = 2)
+
+        # Apply ratio test
+        good = []
+        countMatches = 0
+        for m,n  in matches:
+            if m.distance < 0.75*n.distance:
+                good.append([m])
+                countMatches += 1
+        if countMatches > maxMatches:
+            maxMatches = countMatches
+            idx = i
+    if idx < 7:
+        return idx+1
+    return 8
+
+## main ##
+readImgData(TRAFFIC_SIGN_PATH)
+vidcap = cv2.VideoCapture(INPUT_PATH + INPUT_VIDEO)
 success, frame = vidcap.read()
 if vidcap.isOpened() == False:
     print ("Error open video")
 
+# video writer for the result
 fps = int(vidcap.get(cv2.CAP_PROP_FPS))
 width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+videoOut = cv2.VideoWriter(OUTPUT_PATH + 'output.avi', cv2.VideoWriter_fourcc(*'XVID'), fps, (width,height))
 
-videoOut = cv2.VideoWriter("output4.avi", cv2.VideoWriter_fourcc(*'XVID'), fps, (width,height))
 rectangles = []
 count_frame = 0
 
 while success:
-    success, frame = vidcap.read()
+    count_frame = count_frame + 1
+    success, frame = vidcap.read(SCALE)
     if success == False:
         break
-    frame2 = frame.copy()
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     maskRed = cv2.inRange(hsv, np.array([100, 170, 50]), np.array([140, 255, 255]))
     maskBlue = cv2.inRange(hsv, np.array([143,36,50]), np.array([170,255,255]))
     mask = cv2.bitwise_or(maskRed, maskBlue)
+    # mask = cv2.Canny(mask, 75,200)
     # mask = cv2.GaussianBlur(mask, (5, 5), 2, 2)
     element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
     mask = cv2.dilate(mask,element,iterations = 1)
-
     _, contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+    foundSign = 0
     for contour in contours:
         approx = cv2.approxPolyDP(contour,0.05*cv2.arcLength(contour,True),True)
         area = cv2.contourArea(contour)
@@ -78,28 +85,31 @@ while success:
             x,y,w,h = rect
             subImg = frame[y:y+h,x:x+w]
             id = compareImg(subImg)
-            if id == -1:
+            if id == 0:
                 continue
             cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
-            cv2.putText(frame, str(id), (x+w+20, y+h+20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,255,255))
-            temp = [id, count_frame, x, y, x+w, y+h]
+            cv2.putText(frame, str(id), (x+20, y+20), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255,255), 3, cv2.LINE_AA)
+            temp = [count_frame, id, x, y, x+w, y+h]
             rectangles.append(temp)
+            foundSign = 1
+        if foundSign: # if found a traffic sign in a frame
+            break
 
-    # cv2.imshow("frame", frame)
+    cv2.imshow("frame", frame)
+    cv2.imshow("mask", mask)
     videoOut.write(frame)
-    # cv2.imshow("mask", mask)
+
     k = cv2.waitKey(1)
     if k in [27, ord('Q'), ord('q')]: # exit on ESC
         break
-    count_frame = count_frame + 1
-# print (np.array(rectangles))
+vidcap.release()
+videoOut.release()
+cv2.destroyAllWindows()
 
-with open('output4.txt', 'w') as file:
+# write result to Output.txt
+with open(OUTPUT_PATH + 'Output.txt', 'w') as file:
     file.write(str(len(rectangles)) + '\n')
     for temp in rectangles:
         strArr = [str(a) for a in temp]
         file.write(" ".join(strArr))
         file.write('\n')
-vidcap.release()
-videoOut.release()
-cv2.destroyAllWindows()
